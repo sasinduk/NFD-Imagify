@@ -9,12 +9,12 @@ export default async function handler(req: Request) {
   const { content, index, msgId, msgHash } = await req.json();
   console.log("upscale.handler", content);
   const client = new Midjourney({
-    ServerId: <string>process.env.SERVER_ID,
-    ChannelId: <string>process.env.CHANNEL_ID,
-    SalaiToken: <string>process.env.SALAI_TOKEN,
-    HuggingFaceToken: <string>process.env.HUGGINGFACE_TOKEN,
+    ServerId: 1118597018978361455,//<string>process.env.SERVER_ID,
+    ChannelId: 1118597019683012660,//<string>process.env.CHANNEL_ID,
+    SalaiToken: 'NjYzNzM4MzcwMjA3MjUyNTMw.GPlEYd.MVqE4wND1014nIOzC_8UR3FuKJLS4ElVtAZM4s',//<string>process.env.SALAI_TOKEN,
+    HuggingFaceToken: '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',//<string>process.env.HUGGINGFACE_TOKEN,
     Debug: true,
-    Ws: process.env.WS === "true",
+    Ws: false,//process.env.WS === "true",
   });
   await client.init();
   const encoder = new TextEncoder();

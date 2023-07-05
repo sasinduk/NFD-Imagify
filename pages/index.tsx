@@ -190,10 +190,10 @@ const Index: React.FC = () => {
     progress,
     content,
   }: Message) => {
-    if (process.env.NEXT_PUBLIC_IMAGE_PREFIX) {
+    if ("/") { //process.env.NEXT_PUBLIC_IMAGE_PREFIX) {
       img = img.replace(
         "https://cdn.discordapp.com/",
-        process.env.NEXT_PUBLIC_IMAGE_PREFIX
+        "/"//process.env.NEXT_PUBLIC_IMAGE_PREFIX
       );
     }
     return (
