@@ -10,8 +10,8 @@ const handler = async (req: Request) => {
 
   console.log("imagine.handler", prompt);
   const client = new Midjourney({
-    ServerId: 1118597018978361455,//<string>process.env.SERVER_ID,
-    ChannelId: 1118597019683012660,//<string>process.env.CHANNEL_ID,
+    ServerId: '1118597018978361455',//<string>process.env.SERVER_ID,
+    ChannelId: '1118597019683012660',//<string>process.env.CHANNEL_ID,
     SalaiToken: 'NjYzNzM4MzcwMjA3MjUyNTMw.GPlEYd.MVqE4wND1014nIOzC_8UR3FuKJLS4ElVtAZM4s',//<string>process.env.SALAI_TOKEN,
     HuggingFaceToken: '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',//<string>process.env.HUGGINGFACE_TOKEN,
     Debug: true,
