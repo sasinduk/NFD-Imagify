@@ -21,6 +21,7 @@ const handler = async (req: Request) => {
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
     start(controller) {
+      console.log(<string>process.env.SERVER_ID);
       console.log("imagine.start", prompt);
       client
         .Imagine(prompt, (uri: string, progress: string) => {
