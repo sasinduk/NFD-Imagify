@@ -52,8 +52,7 @@ const Index: React.FC = () => {
 
   const handleMessageSend = async () => {
     let configuration = `${CheckedValueVersion ? ', ' + 'v5' : ''}${selectedValueCategory ? ', ' + selectedValueCategory : ''}${selectedValueGrading ? ', ' + selectedValueGrading : ''}${selectedValueType ? ', ' + selectedValueType : ''}${selectedValueRealism ? ', ' + selectedValueRealism : ''}${selectedValueBackground ? ', ' + selectedValueBackground : ''}${selectedValueAspectRatio ? ', ' + selectedValueAspectRatio : ''}`;
-    let newConfigMessage = `${inputValue.trim()}${configuration}`;
-    console.log(newConfigMessage);
+    let newConfigMessage = `${inputValue.trim()}${configuration}`;    
     let newMessage: Message = {
       text: newConfigMessage,
       hasTag: false,
@@ -63,12 +62,12 @@ const Index: React.FC = () => {
 
     if (newMessage.text) {
       const oldMessages = messages;
-      setInputDisable(true);
+      //setInputDisable(true);
+      setInputValue("");
       setMessages([...oldMessages, newMessage]);
       await Imagine(
         JSON.stringify({ prompt: newMessage.text }),
         (data: MJMessage) => {
-          console.log(data);
           newMessage.img = data.uri;
           if (data.id) {
             newMessage.hasTag = true;
@@ -80,7 +79,7 @@ const Index: React.FC = () => {
           setMessages([...oldMessages, newMessage]);
         }
       );
-      setInputValue("");
+      //setInputValue("");
       setInputDisable(false);
     }
   };
