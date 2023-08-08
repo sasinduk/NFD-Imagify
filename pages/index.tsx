@@ -1,9 +1,10 @@
-import React, { useState } from "react";
-import { Input, Button, List, Image, Typography } from "antd";
+import React, { useEffect, useRef, useState } from "react";
+import { Input, Button, List, Image, Typography, Progress } from "antd";
 import { SendOutlined } from "@ant-design/icons";
 import { Imagine, Upscale, Variation } from "../request";
 import { MJMessage } from "midjourney";
 import { Message } from "../interfaces/message";
+import { Images } from "../interfaces/images";
 import Tag from "../components/tag";
 import FloatingSettings from "./floatingSettings";
 
@@ -14,6 +15,7 @@ const Index: React.FC = () => {
   const [inputValue, setInputValue] = useState("");
   const [inputDisable, setInputDisable] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [convertedData, setConvertedData] = useState<Message[]>([]);
   const [selectedValueCategory, setSelectedValueCategory] = useState<string | null>(null);
   const [selectedValueGrading, setSelectedValueGrading] = useState<string | null>(null);
   const [selectedValueType, setSelectedValueType] = useState<string | null>(null);
@@ -21,6 +23,130 @@ const Index: React.FC = () => {
   const [selectedValueBackground, setSelectedValueBackground] = useState<string | null>(null);
   const [selectedValueAspectRatio, setSelectedValueAspectRatio] = useState<string | null>(null);
   const [CheckedValueVersion, setCheckedValueVersion] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [scrollbarWidth, setScrollbarWidth] = useState(0);
+  const containerRef = useRef(null);
+  const itemsPerPage = 2;
+
+  useEffect(() => {
+    const scrollbarWidth = containerRef.current.offsetWidth - containerRef.current.clientWidth + 70;
+    setScrollbarWidth(scrollbarWidth);
+  }, []);
+
+  const fetchDataFromDatabase = async (User) => {
+    const API_URL = 'https://prod-163.westus.logic.azure.com:443/workflows/7a7c6652fc634609ba16e8ca9bcf4f1d/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=oi8Dad8PjcumW14tipmR_7eOKs3426eXsHgO-Vfi78Y'; // Replace with your actual database API endpoint
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          image: {
+            User: User,
+          },
+         }),
+      });      
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    const User = localStorage.getItem('user');
+    Promise.all([
+      fetchDataFromDatabase(User),
+      fetchDataFromDatabase(User),
+    ])
+      .then(([data1, data2]) => {
+        const formattedData1 = data1.map((item) => ({
+          requestId: undefined,
+          text: item['cr056_name'] || '',
+          img: item['cr056_imageurl'] || '',
+          msgID: item['cr056_messageid'] || '',
+          msgHash: item['cr056_messagehash'] || '',
+          content: item['cr056_content'] || '',
+          hasTag: undefined,
+          progress: item['cr056_timestamp'] || '',
+          index: undefined,
+          fromDB: true,
+          isUpscale: item['cr056_upscalebit'] || false,
+          isVarient: item['cr056_variantbit'] || false
+        }));
+        const formattedData2 = data2.map((item) => ({
+          requestId: undefined,
+          text: item['cr056_name'] || '',
+          img: item['cr056_imageurl'] || '',
+          msgID: item['cr056_messageid'] || '',
+          msgHash: item['cr056_messagehash'] || '',
+          content: item['cr056_content'] || '',
+          hasTag: undefined,
+          progress: item['cr056_timestamp'] || '',
+          index: undefined,
+          fromDB: true,
+          isUpscale: item['cr056_upscalebit'] || false,
+          isVarient: item['cr056_variantbit'] || false
+        }));
+        const mergedData = [...formattedData1, ...formattedData2]; 
+        mergedData.sort((a, b) => a.progress - b.progress);
+        setConvertedData((prevConvertedData) => [...prevConvertedData, ...mergedData]);
+        const combinedData = [...mergedData.slice(0, itemsPerPage)];
+        combinedData.sort((a, b) => new Date(a.progress) - new Date(b.progress));
+        setMessages(combinedData);
+      })
+      .catch((error) => {
+        console.error('Error loading more data:', error);
+      });
+  }, []);
+
+  const loadMoreData = () => {
+    setTimeout(() => {
+      setMessages((prevMessages) => {
+        const startIndex = prevMessages.length;        
+        const endIndex = startIndex + itemsPerPage;   
+        return [...convertedData.slice(startIndex, endIndex), ...prevMessages].sort((b, a) => new Date(b.progress) - new Date(a.progress));
+      });
+    }, 1000);
+    
+  };
+
+  useEffect(() => {
+    if (containerRef.current) {
+      const container = containerRef.current;
+      const handleScroll = () => {        
+        const scrollTop = container.scrollTop;
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
+        if (scrollTop === 0 && scrollTop !== scrollHeight - clientHeight) {
+          setIsLoading(true);
+          const prevScrollTop = container.scrollTop;
+          const prevContainerHeight = container.scrollHeight;
+          loadMoreData(); 
+          setTimeout(() => {            
+            const newContainerHeight = container.scrollHeight;
+            const addedContentHeight = newContainerHeight - prevContainerHeight;
+            const newScrollTop = prevScrollTop + addedContentHeight;
+            container.scrollTop = newScrollTop;
+            const newScrollTopAdjusted = newScrollTop + addedContentHeight;
+            container.scrollTop = newScrollTopAdjusted;
+            setIsLoading(false);
+          }, 0);
+        }        
+      };
+      container.addEventListener('scroll', handleScroll);
+      return () => {
+        container.removeEventListener('scroll', handleScroll);
+      };
+    }
+  }, [messages]);
 
   const handleSelectedValueCategoryChange = (value: string) => {
     setSelectedValueCategory(value);
@@ -50,10 +176,24 @@ const Index: React.FC = () => {
     setCheckedValueVersion(value);
   };
 
+  const getCurrentTimestamp = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  };
+
   const handleMessageSend = async () => {
     let configuration = `${CheckedValueVersion ? ', ' + 'v5' : ''}${selectedValueCategory ? ', ' + selectedValueCategory : ''}${selectedValueGrading ? ', ' + selectedValueGrading : ''}${selectedValueType ? ', ' + selectedValueType : ''}${selectedValueRealism ? ', ' + selectedValueRealism : ''}${selectedValueBackground ? ', ' + selectedValueBackground : ''}${selectedValueAspectRatio ? ', ' + selectedValueAspectRatio : ''}`;
-    let newConfigMessage = `${inputValue.trim()}${configuration}`;    
+    let newConfigMessage = `${inputValue.trim()}${configuration}`;
+    const currentTime = Date.now();
     let newMessage: Message = {
+      requestId: currentTime,
       text: newConfigMessage,
       hasTag: false,
       progress: "waiting start",
@@ -61,26 +201,71 @@ const Index: React.FC = () => {
     };
 
     if (newMessage.text) {
-      const oldMessages = messages;
-      //setInputDisable(true);
       setInputValue("");
-      setMessages([...oldMessages, newMessage]);
+      setMessages((prevMessages) => [...prevMessages, newMessage]);
       await Imagine(
         JSON.stringify({ prompt: newMessage.text }),
-        (data: MJMessage) => {
-          newMessage.img = data.uri;
-          if (data.id) {
-            newMessage.hasTag = true;
+        async (data: MJMessage) => {          
+          setMessages((prevMessages) =>
+            prevMessages.map((message) =>
+              message.requestId === newMessage.requestId
+                ? {
+                    ...message,
+                    img: data.uri,
+                    hasTag: !!data.id,
+                    msgHash: data.hash,
+                    msgID: data.id,
+                    progress: data.progress,
+                    content: data.content,
+                  }
+                : message
+            )
+          );          
+
+          if (data.progress === "done") {
+            const API_URL = "https://prod-151.westus.logic.azure.com:443/workflows/20a8ee78cf1341e5a1cba9b59c935f32/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Ixl7jyjDqRhRApvCcMm9HXnmfG_mtSeUele5YeEH2L0";
+            const userFromLocalStorage: string | null = localStorage.getItem('user');
+            const user: string = userFromLocalStorage !== null ? userFromLocalStorage : 'Default User';
+            let image: Images = {
+              User: user,
+              ImageURL: data.uri,
+              Message: newConfigMessage, 
+              content: data.content, 
+              MessageId: data.id,
+              MessageHash: data.hash,
+              Timestamp : getCurrentTimestamp(), 
+              UpscaleBit: false, 
+              VariantBit: false
+            }
+            try {
+              const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image }),
+              });
+    
+              if (!response.ok) {
+                throw new Error('Failed to send response data to the backend.');
+              }
+            } catch (error) {
+              console.error('Error saving image:', error);
+              setMessages((prevMessages) =>
+                prevMessages.map((message) =>
+                  message.requestId === newMessage.requestId
+                    ? {
+                        ...message,
+                        progress: data.progress+" : image not saved",
+                      }
+                    : message
+                )
+              );
+            }
           }
-          newMessage.msgHash = data.hash;
-          newMessage.msgID = data.id;
-          newMessage.progress = data.progress;
-          newMessage.content = data.content;
-          setMessages([...oldMessages, newMessage]);
         }
       );
-      //setInputValue("");
-      setInputDisable(false);
+      setInputDisable(false);      
     }
   };
 
@@ -98,21 +283,61 @@ const Index: React.FC = () => {
     };
 
     const oldMessages = messages;
-    setInputDisable(true);
     setMessages([...oldMessages, newMessage]);
     await Upscale(
       JSON.stringify({ content: pormpt, index, msgId, msgHash }),
-      (data: MJMessage) => {
+      async (data: MJMessage) => {
         newMessage.img = data.uri;
         newMessage.msgHash = data.hash;
         newMessage.msgID = data.id;
         newMessage.content = data.content;
         newMessage.progress = data.progress;
-        setMessages([...oldMessages, newMessage]);
+        setMessages([...oldMessages, newMessage]);        
+
+        if (data.progress === "done") {
+          const API_URL = "https://prod-151.westus.logic.azure.com:443/workflows/20a8ee78cf1341e5a1cba9b59c935f32/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Ixl7jyjDqRhRApvCcMm9HXnmfG_mtSeUele5YeEH2L0";
+          const userFromLocalStorage: string | null = localStorage.getItem('user');
+          const user: string = userFromLocalStorage !== null ? userFromLocalStorage : 'Default User';
+          let image: Images = {
+            User: user,
+            ImageURL: data.uri,
+            Message: newMessage.text, 
+            content: newMessage.content, 
+            MessageId: data.id,
+            Timestamp : getCurrentTimestamp(), 
+            UpscaleBit: true,
+            VariantBit: false
+          }
+          try {
+            const response = await fetch(API_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ image }),
+            });
+  
+            if (!response.ok) {
+              throw new Error('Failed to send response data to the backend.');
+            }
+          } catch (error) {
+            console.error('Error saving image:', error);
+            setMessages((prevMessages) =>
+              prevMessages.map((message) =>
+                message.requestId === newMessage.requestId
+                  ? {
+                      ...message,
+                      progress: data.progress+" : image not saved",
+                    }
+                  : message
+              )
+            );
+          }
+        }
       }
     );
-    setInputDisable(false);
   };
+
   const variation = async (
     content: string,
     msgId: string,
@@ -127,11 +352,10 @@ const Index: React.FC = () => {
     };
 
     const oldMessages = messages;
-    setInputDisable(true);
     setMessages([...oldMessages, newMessage]);
-    await Variation(
-      JSON.stringify({ content, index, msgId, msgHash }),
-      (data: MJMessage) => {
+    await Variation(        
+      JSON.stringify({ content, index, msgId, msgHash }),      
+      async (data: MJMessage) => {
         newMessage.img = data.uri;
         if (data.uri.endsWith(".png")) {
           newMessage.hasTag = true;
@@ -141,9 +365,50 @@ const Index: React.FC = () => {
         newMessage.content = data.content;
         newMessage.progress = data.progress;
         setMessages([...oldMessages, newMessage]);
+
+        if (data.progress === "done") {
+          const API_URL = "https://prod-151.westus.logic.azure.com:443/workflows/20a8ee78cf1341e5a1cba9b59c935f32/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Ixl7jyjDqRhRApvCcMm9HXnmfG_mtSeUele5YeEH2L0";
+          const userFromLocalStorage: string | null = localStorage.getItem('user');
+          const user: string = userFromLocalStorage !== null ? userFromLocalStorage : 'Default User';
+          let image: Images = {
+            User: user,
+            ImageURL: data.uri,
+            Message: newMessage.text, 
+            content: newMessage.content, 
+            MessageId: data.id,
+            MessageHash: data.hash,
+            Timestamp : getCurrentTimestamp(), 
+            UpscaleBit: false,
+            VariantBit: true
+          }
+          try {
+            const response = await fetch(API_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ image }),
+            });
+  
+            if (!response.ok) {
+              throw new Error('Failed to send response data to the backend.');
+            }
+          } catch (error) {
+            console.error('Error saving image:', error);
+            setMessages((prevMessages) =>
+              prevMessages.map((message) =>
+                message.requestId === newMessage.requestId
+                  ? {
+                      ...message,
+                      progress: data.progress+" : image not saved",
+                    }
+                  : message
+              )
+            );
+          }
+        }
       }
     );
-    setInputDisable(false);
   };
   const tagClick = (
     content: string,
@@ -180,6 +445,7 @@ const Index: React.FC = () => {
         break;
     }
   };
+
   const renderMessage = ({
     text,
     img,
@@ -195,50 +461,107 @@ const Index: React.FC = () => {
         "/"//process.env.NEXT_PUBLIC_IMAGE_PREFIX
       );
     }
-    return (
-      <List.Item
-        className="flex flex-col space-y-4 justify-start items-start"
-        style={{
-          alignItems: "flex-start",
-        }}
-      >
-        <Text>
-          {text} {`(${progress})`}
-        </Text>
 
-        <Image className="ml-2 rounded-xl" width={400} src={img} />
+    if (isUpscale) {
+      return (
+        <List.Item
+          className="flex flex-col space-y-4 justify-start items-start"
+          style={{
+            alignItems: "flex-start",
+          }}
+        >
+          <Text>
+            {text} {`(${progress})`}
+          </Text>
 
-        {hasTag && (
-          <Tag
-            Data={["V1", "V2", "V3", "V4"]}
-            onClick={(tag) =>
-              tagClick(String(content), String(msgID), String(msgHash), tag)
-            }
-          />
-        )}
-        {hasTag && (
-          <Tag
-            Data={["U1", "U2", "U3", "U4"]}
-            onClick={(tag) =>
-              tagClick(String(content), String(msgID), String(msgHash), tag)
-            }
-          />
-        )}
-      </List.Item>
-    );
+          <Image className="ml-2 rounded-xl" width={400} src={img} />        
+        </List.Item>     
+      ) 
+    } else if (isVarient || fromDB) {
+      return (
+        <List.Item
+          className="flex flex-col space-y-4 justify-start items-start"
+          style={{
+            alignItems: "flex-start",
+          }}
+        >
+          <Text>
+            {text} {`(${progress})`}
+          </Text>
+
+          <Image className="ml-2 rounded-xl" width={400} src={img} />
+
+            <Tag
+              Data={["V1", "V2", "V3", "V4"]}
+              onClick={(tag) =>
+                tagClick(String(content), String(msgID), String(msgHash), tag)
+              }
+            />
+            <Tag
+              Data={["U1", "U2", "U3", "U4"]}
+              onClick={(tag) =>
+                tagClick(String(content), String(msgID), String(msgHash), tag)
+              }
+            />
+        </List.Item>
+      );
+    } else {
+      return (
+        <List.Item
+          className="flex flex-col space-y-4 justify-start items-start"
+          style={{
+            alignItems: "flex-start",
+          }}
+        >
+          <Text>
+            {text} {`(${progress})`}
+          </Text>
+
+          <Image className="ml-2 rounded-xl" width={400} src={img} />
+
+          {hasTag && (
+            <Tag
+              Data={["V1", "V2", "V3", "V4"]}
+              onClick={(tag) =>
+                tagClick(String(content), String(msgID), String(msgHash), tag)
+              }
+            />
+          )}
+          {hasTag && (
+            <Tag
+              Data={["U1", "U2", "U3", "U4"]}
+              onClick={(tag) =>
+                tagClick(String(content), String(msgID), String(msgHash), tag)
+              }
+            />
+          )}
+        </List.Item>
+      );
+    }      
   };
 
-  return (
-    <div className="w-full mx-auto px-4 h-full overflow-y-hidden">      
+  return ( 
+    <div
+      ref={containerRef}
+      className="w-full mx-auto px-4 h-full xl:w-5/5 w-5/5 overflow-y-scroll"
+      style={{
+        height: 'calc(100vh - 96px)',
+      }}
+    > 
+      {isLoading && (
+        <div className="w-full mx-auto px-20 xl:w-5/5 w-5/5 loading-indicator">
+          Loading...
+        </div>
+      )}  
       <List
-        className=" mx-auto xl:w-3/5 w-4/5 justify-start overflow-y-auto"
+        className="w-full mx-auto px-20 h-full xl:w-5/5 w-5/5"
         style={{
           height: "calc(100vh - 96px)",
         }}
         dataSource={messages}
         renderItem={renderMessage}
-      />            
-      <div className="absolute z-10 w-3/4 xl:w-3/5 right-0 bottom-10 left-0 mx-auto ">
+      />                
+      <div className="absolute z-10 w-4/5 xl:w-4/5 right-0 bottom-10 left-0 mx-auto ">
         <TextArea
           className="w-full"
           disabled={inputDisable}
@@ -274,7 +597,13 @@ const Index: React.FC = () => {
           }}
         />        
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>       
+      <div
+        className="absolute z-10"
+        style={{
+          bottom: '45px',
+          right: `${scrollbarWidth}px`,
+        }}
+      >
         <FloatingSettings 
           onSelectedValueCategoryChange={handleSelectedValueCategoryChange}
           onSelectedValueGradingChange={handleSelectedValueGradingChange}
